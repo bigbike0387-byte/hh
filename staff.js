@@ -1,191 +1,116 @@
 /**
- * staff.js - ตรรกะฝ่ายครัว/พนักงาน (ฉบับสมบูรณ์)
+ * staff.js - ตรรกะฝั่งห้องเครื่อง (KDS)
  */
 
-let activeStaffChatTable = null;
+let activeChatTable = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!checkAuth('staff.html')) return;
-
-    // Initialize for 'staff' role
-    setupCommonSync('staff', null, renderAllStaff);
-
-    // Handle Chat Input Enter
-    document.getElementById('kds-chat-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSendMessageAtStaff();
-    });
+    if (!checkAuth('staff')) return;
+    // เริ่มระบบ Sync
+    setupCoreSync('staff', null, renderStaffUI);
 });
 
-function renderAllStaff() {
+function renderStaffUI() {
     renderOrdersAtStaff();
-    renderNotificationsAtStaff();
-    if (activeStaffChatTable) renderChatAtStaff();
+    renderChatActiveTables();
+    if (activeChatTable) renderChatAtStaff();
+    updateNotiBadgeAtStaff();
 }
 
 // --- Order Management ---
-
 function renderOrdersAtStaff() {
-    const { orders } = getAllData();
-    const activeOrders = orders.filter(o => !o.paid); // Show everything not paid
+    const orders = getOrders().filter(o => !o.paid);
+    const container = document.getElementById('staff-order-list');
 
-    document.getElementById('kds-stats').innerText = `${activeOrders.filter(o => o.status === 'waiting').length} ออเดอร์กำลังรอ`;
+    if (orders.length === 0) {
+        container.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center;">ไม่มีออเดอร์ค้าง</div>';
+        return;
+    }
 
-    const container = document.getElementById('kds-orders-grid');
-    container.innerHTML = activeOrders.map(o => `
-        <div class="card fade-in" style="border-top: 5px solid var(--${o.status});">
+    container.innerHTML = orders.reverse().map(o => `
+        <div class="card fade-in">
             <div class="flex-between">
-                <h3>โต๊ะ ${o.table}</h3>
-                <span class="badge badge-${o.status}">${getStatusTextThai(o.status)}</span>
+                <strong>โต๊ะ ${o.table} [ID: ${o.id}]</strong>
+                <span class="badge bg-${o.status}">${getStatusText(o.status)}</span>
             </div>
-            <div class="mt-2" style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 10px;">
-                ${o.items.map(i => `<div class="flex-between"><span>${i.name}</span> <span>x${i.qty}</span></div>`).join('')}
+            <div class="mt-1" style="font-size: 1.1rem; border-top: 1px solid #eee; padding-top: 10px;">
+                ${o.items.map(i => `<div class="mb-1">• ${i.name} <strong>x${i.qty}</strong></div>`).join('')}
             </div>
-            <div class="mt-2 flex-between" style="gap: 5px;">
-                ${getNextActionButtonsAtStaff(o)}
-                <button class="btn btn-outline btn-sm" onclick="toggleStaffChat(${o.table})" title="แชท">
-                    <i class="fas fa-comment"></i>
-                </button>
-                <button class="btn btn-outline btn-sm" onclick="showOrderHistory('${o.id}')" title="ประวัติ">
-                    <i class="fas fa-history"></i>
-                </button>
-            </div>
-            <div class="mt-2" style="font-size: 0.75rem; color: #999;">
-                สั่งเมื่อ: ${new Date(o.createdAt).toLocaleTimeString()}
+            <div class="mt-1" style="display: flex; gap: 5px;">
+                ${o.status === 'waiting' ? `<button class="btn btn-warning btn-sm" onclick="changeStatus('${o.id}', 'cooking')">เริ่มทำ 👨🍳</button>` : ''}
+                ${o.status === 'cooking' ? `<button class="btn btn-info btn-sm" onclick="changeStatus('${o.id}', 'ready')">เสร็จแล้ว ✨</button>` : ''}
+                ${o.status === 'ready' ? `<button class="btn btn-success btn-sm" onclick="changeStatus('${o.id}', 'served')">เสิร์ฟแล้ว ✅</button>` : ''}
             </div>
         </div>
     `).join('');
 }
 
-function getNextActionButtonsAtStaff(order) {
-    if (order.status === 'waiting') {
-        return `<button class="btn btn-warning btn-sm" style="flex: 1" onclick="handleUpdateStatus('${order.id}', 'cooking', 'ครัวรับรายการและเริ่มปรุง')">เริ่มปรุง</button>`;
-    } else if (order.status === 'cooking') {
-        return `<button class="btn btn-info btn-sm" style="flex: 1" onclick="handleUpdateStatus('${order.id}', 'ready', 'ปรุงเสร็จแล้ว พร้อมเสิร์ฟ')">ปรุงเสร็จ</button>`;
-    } else if (order.status === 'ready') {
-        return `<button class="btn btn-success btn-sm" style="flex: 1" onclick="handleUpdateStatus('${order.id}', 'served', 'พนักงานเสิร์ฟอาหารแล้ว')">เสิร์ฟแล้ว</button>`;
+function changeStatus(id, status) {
+    updateOrderStatus(id, status);
+}
+
+// --- Chat Functions ---
+function renderChatActiveTables() {
+    const msgs = getData(DB_KEYS.MESSAGES);
+    const container = document.getElementById('staff-chat-list');
+
+    // ดึงโต๊ะที่เคยแชทมาแบบไม่ซ้ำกัน
+    const tables = [...new Set(msgs.map(m => m.table))];
+
+    if (tables.length === 0) {
+        container.innerHTML = '<p class="text-muted">ยังไม่มีประวัติการแชท</p>';
+        return;
     }
-    return '';
-}
 
-function handleUpdateStatus(id, status, note) {
-    updateOrderStatus(id, status, note);
-    renderAllStaff();
-}
-
-function getStatusTextThai(status) {
-    const map = { waiting: 'รอคิว', cooking: 'กำลังปรุง', ready: 'พร้อมเสิร์ฟ', served: 'เสิร์ฟแล้ว', paid: 'จ่ายแล้ว' };
-    return map[status] || status;
-}
-
-// --- Notifications ---
-
-function renderNotificationsAtStaff() {
-    const notis = getNotificationsByRole('staff');
-    const container = document.getElementById('kds-noti-list');
-
-    container.innerHTML = notis.map(n => `
-        <div class="noti-card noti-${n.type} ${n.read ? '' : 'noti-unread'} fade-in" onclick="handleNotiClick('${n.id}', '${n.type}', '${n.refId}', '${n.targetTable}')">
-            <div class="flex-between">
-                <strong>${getNotiTitleThai(n.type)}</strong>
-                <small>${new Date(n.createdAt).toLocaleTimeString()}</small>
-            </div>
-            <div style="font-size: 0.9rem; margin-top: 5px;">${n.message}</div>
-        </div>
+    container.innerHTML = tables.map(t => `
+        <button class="btn btn-outline" style="margin-right: 10px;" onclick="openStaffChat('${t}')">
+            แชทโต๊ะ ${t}
+        </button>
     `).join('');
 }
 
-function getNotiTitleThai(type) {
-    const map = { order: '🍴 ออเดอร์ใหม่', call: '🔔 เรียกพนักงาน', message: '💬 ข้อความใหม่', ready: '✅ อาหารเสร็จ', payment: '💰 ชำระเงิน' };
-    return map[type] || 'แจ้งเตือน';
+function openStaffChat(table) {
+    activeChatTable = table;
+    document.getElementById('current-chat-table').innerText = table;
+    document.getElementById('staff-chat-modal').style.display = 'flex';
+    renderChatAtStaff();
 }
 
-function handleNotiClick(id, type, refId, table) {
-    markNotiAsRead(id);
-    if (type === 'message' || type === 'call') {
-        toggleStaffChat(table);
-    }
-}
-
-function handleMarkAllNotiRead() {
-    const notis = getNotificationsByRole('staff');
-    notis.forEach(n => markNotiAsRead(n.id));
-    renderAllStaff();
-}
-
-// --- Chat ---
-
-function toggleStaffChat(table = null) {
-    activeStaffChatTable = table;
-    const modal = document.getElementById('kds-chat-modal');
-    if (table) {
-        document.getElementById('kds-chat-title').innerText = `แชทพูดคุยกับโต๊ะ ${table}`;
-        modal.style.display = 'flex';
-        renderChatAtStaff();
-        scrollToBottom('kds-chat-box');
-    } else {
-        modal.style.display = 'none';
-    }
-}
-
-function handleSendMessageAtStaff() {
-    const input = document.getElementById('kds-chat-input');
-    if (input.value.trim() && activeStaffChatTable) {
-        sendMessage(activeStaffChatTable, 'staff', input.value.trim());
-        input.value = '';
-        renderChatAtStaff();
-        scrollToBottom('kds-chat-box');
-    }
+function closeStaffChat() {
+    activeChatTable = null;
+    document.getElementById('staff-chat-modal').style.display = 'none';
 }
 
 function renderChatAtStaff() {
-    const { messages } = getAllData();
-    const tableMsgs = messages.filter(m => m.table == activeStaffChatTable);
-    const container = document.getElementById('kds-chat-box');
+    const msgs = getData(DB_KEYS.MESSAGES).filter(m => m.table == activeChatTable);
+    const box = document.getElementById('staff-chat-box');
+    if (!box) return;
 
-    container.innerHTML = tableMsgs.map(m => `
-        <div class="chat-msg">
-            <div class="msg-content ${m.sender === 'staff' ? 'msg-customer' : 'msg-staff'}">
+    box.innerHTML = msgs.map(m => `
+        <div style="margin-bottom: 8px; text-align: ${m.sender === 'staff' ? 'right' : 'left'};">
+            <div style="display: inline-block; padding: 8px; border-radius: 12px; background: ${m.sender === 'staff' ? 'var(--info)' : '#eee'}; color: ${m.sender === 'staff' ? 'white' : 'black'}; max-width: 80%;">
                 ${m.text}
             </div>
-            <small style="align-self: ${m.sender === 'staff' ? 'flex-end' : 'flex-start'}; font-size: 0.7rem; color: #999;">
-                ${new Date(m.time).toLocaleTimeString()}
-            </small>
         </div>
     `).join('');
+    box.scrollTop = box.scrollHeight;
 }
 
-// --- Order History ---
-
-function showOrderHistory(id) {
-    const { orders } = getAllData();
-    const order = orders.find(o => o.id === id);
-    if (!order) return;
-
-    const modal = document.getElementById('order-history-modal');
-    const content = document.getElementById('history-content');
-
-    content.innerHTML = `
-        <div class="mb-2">
-            <strong>เลขที่ออเดอร์:</strong> ${order.id}<br>
-            <strong>โต๊ะ:</strong> ${order.table}<br>
-            <strong>รายการ:</strong> ${order.items.map(i => `${i.name} x${i.qty}`).join(', ')}<br>
-            <strong>ยอดรวม:</strong> ${order.totalPrice}฿
-        </div>
-        <hr>
-        <h4 class="mt-2">ไทม์ไลน์สถานะ:</h4>
-        <div class="mt-2">
-            ${order.history.map(h => `
-                <div style="padding: 8px; border-left: 2px solid var(--${h.status}); margin-bottom: 5px;">
-                    <span class="badge badge-${h.status}" style="font-size: 0.7rem;">${getStatusTextThai(h.status)}</span>
-                    <small style="color: #666; margin-left: 10px;">${new Date(h.time).toLocaleTimeString()}</small><br>
-                    <small>${h.note}</small>
-                </div>
-            `).reverse().join('')}
-        </div>
-    `;
-    modal.style.display = 'flex';
+function sendStaffMsg() {
+    const input = document.getElementById('staff-chat-input');
+    const text = input.value.trim();
+    if (!text || !activeChatTable) return;
+    sendMessage(activeChatTable, 'staff', text);
+    input.value = '';
 }
 
-function closeHistoryModal() {
-    document.getElementById('order-history-modal').style.display = 'none';
+function updateNotiBadgeAtStaff() {
+    const notis = getData(DB_KEYS.NOTIFICATIONS).filter(n => n.role === 'staff' && !n.read);
+    const badge = document.getElementById('noti-badge');
+    if (notis.length > 0) {
+        badge.innerText = notis.length;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.style.display = 'none';
+    }
 }

@@ -1,28 +1,34 @@
-/* style.css - ระบบดีไซน์ "ครัวรีเทิน" (Updated with Report/Issue) */
+/**
+ * style.css - ระบบดีไซน์ "ครัวรีเทิน"
+ */
 
 @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
 
 :root {
-    --primary: #ff4757;
-    --secondary: #2f3542;
-    --success: #198754;
-    --warning: #fd7e14;
-    --info: #0d6efd;
-    --purple: #6f42c1;
-    --danger: #dc3545;
-    --light: #f1f2f6;
-    --dark: #2f3542;
-    --gray: #6c757d;
+    --primary: #FF4757;
+    --secondary: #2F3542;
+    --success: #2ED573;
+    --warning: #FFA502;
+    --info: #1E90FF;
+    --danger: #FF4757;
+    --purple: #6F42C1;
+    --light: #F1F2F6;
+    --dark: #2F3542;
+    --gray: #A4B0BE;
 
-    --waiting: var(--gray);
-    --cooking: var(--warning);
-    --ready: var(--info);
-    --served: var(--success);
-    --paid: var(--purple);
+    /* สถานะออเดอร์ */
+    --status-waiting: var(--gray);
+    --status-cooking: var(--warning);
+    --status-ready: var(--info);
+    --status-served: var(--success);
+    --status-paid: var(--purple);
 
-    --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    --card-bg: rgba(255, 255, 255, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.4);
+    /* ดีไซน์พรีเมียม */
+    --bg-premium: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
+        url("https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=2070&auto=format&fit=crop");
+    --card-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.5);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -33,15 +39,30 @@
 }
 
 body {
-    background: var(--bg-gradient);
+    background: var(--bg-premium);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
     min-height: 100vh;
     color: var(--dark);
+    line-height: 1.6;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1000px;
     margin: 0 auto;
     padding: 20px;
+}
+
+/* Card & Layout */
+.card {
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
 }
 
 .header {
@@ -55,30 +76,21 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
-.card {
-    background: var(--card-bg);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    border: 1px solid var(--glass-border);
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
-}
-
+/* Button & UI Items */
 .btn {
     border: none;
     border-radius: 12px;
-    padding: 10px 20px;
+    padding: 12px 20px;
     font-weight: 500;
     cursor: pointer;
+    transition: 0.2s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: all 0.2s;
 }
 
 .btn:active {
@@ -90,144 +102,53 @@ body {
     color: white;
 }
 
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: white;
+}
+
 .btn-outline {
     background: transparent;
     border: 2px solid var(--primary);
     color: var(--primary);
 }
 
-.btn-success {
-    background: var(--success);
-    color: white;
-}
-
-.btn-danger {
-    background: var(--danger);
-    color: white;
-}
-
-.btn-sm {
-    padding: 6px 12px;
-    font-size: 0.85rem;
-}
-
 .badge {
     padding: 4px 12px;
     border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: 0.8rem;
     color: white;
-}
-
-.badge-waiting {
-    background: var(--waiting);
-}
-
-.badge-cooking {
-    background: var(--cooking);
-}
-
-.badge-ready {
-    background: var(--ready);
-}
-
-.badge-served {
-    background: var(--served);
-}
-
-.badge-paid {
-    background: var(--paid);
-}
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-}
-
-/* Report Styles */
-.stat-card {
-    text-align: center;
-    padding: 25px;
-    border-left: 5px solid var(--primary);
-}
-
-.table-responsive {
-    overflow-x: auto;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-}
-
-th {
-    text-align: left;
-    padding: 12px;
-    border-bottom: 2px solid var(--light);
-    color: var(--gray);
     font-weight: 500;
 }
 
-td {
-    padding: 12px;
-    border-bottom: 1px solid var(--light);
+.bg-waiting {
+    background: var(--status-waiting);
 }
 
-/* Chat Bubbles */
-.chat-msg {
-    margin-bottom: 10px;
-    display: flex;
-    flex-direction: column;
+.bg-cooking {
+    background: var(--status-cooking);
 }
 
-.msg-content {
-    max-width: 80%;
-    padding: 8px 15px;
-    border-radius: 15px;
-    font-size: 0.95rem;
+.bg-ready {
+    background: var(--status-ready);
 }
 
-.msg-customer {
-    align-self: flex-end;
-    background: var(--primary);
-    color: white;
-    border-bottom-right-radius: 2px;
+.bg-served {
+    background: var(--status-served);
 }
 
-.msg-staff {
-    align-self: flex-start;
-    background: #eee;
-    color: var(--dark);
-    border-bottom-left-radius: 2px;
+.bg-paid {
+    background: var(--status-paid);
 }
 
-/* Modal Glassmorphism */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(5px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-}
-
-.modal-content {
-    width: 90%;
-    max-width: 500px;
-    max-height: 85vh;
-    overflow-y: auto;
-}
-
-/* Animations */
+/* Animation */
 .fade-in {
-    animation: fadeIn 0.4s ease forwards;
+    animation: fadeIn 0.5s ease-in-out;
 }
 
 @keyframes fadeIn {
@@ -242,20 +163,27 @@ td {
     }
 }
 
+.logo {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
 .flex-between {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.mt-2 {
-    margin-top: 15px;
+.mt-1 {
+    margin-top: 10px;
 }
 
-.mb-2 {
-    margin-bottom: 15px;
+.mb-1 {
+    margin-bottom: 10px;
 }
 
-.text-primary {
-    color: var(--primary);
+.text-muted {
+    color: var(--gray);
+    font-size: 0.9rem;
 }

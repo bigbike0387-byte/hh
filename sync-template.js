@@ -1,52 +1,61 @@
 /**
- * sync-template.js - มาตรฐานการ Sync และ Notification เสียง
- * ใช้ร่วมกันทุกหน้าเพื่อให้ทำงานได้เหมือนกัน 100%
+ * sync-template.js - ตรรกะการ Sync ข้อมูลแบบ Real-time
  */
 
-const AUDIO_ALERTS = {
-    order: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
-    ready: 'https://assets.mixkit.co/active_storage/sfx/598/598-preview.mp3',
-    message: 'https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3',
-    call: 'https://assets.mixkit.co/active_storage/sfx/1077/1077-preview.mp3'
-};
-
-let lastKnownNotiId = 0;
-
-function setupCommonSync(role, table, renderFn) {
-    // 1. Initialize System
-    initKruaSystem(() => {
-        renderFn();
-        checkNewNotifications(role, table);
-    });
-
-    // 2. Initial Render
+/**
+ * ฟังก์ชันหลักที่ทุกหน้าต้องใช้เพื่อเริ่มระบบ Sync
+ * @param {string} role - บทบาทของผู้ใช้ (customer / staff / owner)
+ * @param {string} table - เลขโต๊ะ (สำหรับลูกค้า)
+ * @param {function} renderFn - ฟังก์ชันที่จะให้รันใหม่เมื่อข้อมูลเปลี่ยน
+ */
+function setupCoreSync(role, table, renderFn) {
+    // 1. รันครั้งแรกทันที
     renderFn();
 
-    // 3. Mark last noti so we don't alert old ones
-    const notis = getNotificationsByRole(role, table);
-    if (notis.length > 0) lastKnownNotiId = notis[0].id;
-}
-
-function checkNewNotifications(role, table) {
-    const notis = getNotificationsByRole(role, table).filter(n => !n.read && n.id > lastKnownNotiId);
-
-    if (notis.length > 0) {
-        lastKnownNotiId = notis[0].id;
-        const latest = notis[0];
-
-        // Play Sound
-        if (AUDIO_ALERTS[latest.type]) {
-            const audio = new Audio(AUDIO_ALERTS[latest.type]);
-            audio.play().catch(e => console.warn('Audio play blocked'));
+    // 2. ฟังการเปลี่ยนแปลงจากหน้าอื่นๆ (window.addEventListener("storage"))
+    window.addEventListener('storage', (e) => {
+        // เช็คว่าข้อมูลที่เปลี่ยน เกี่ยวกับระบบเราไหม
+        if (e.key && e.key.includes('krua_')) {
+            console.log('ข้อมูลเปลี่ยนจากหน้าอื่น: ', e.key);
+            renderFn();
+            checkNewNotifications(role, table);
         }
+    });
 
-        // Optional: Show browser notification or Toast
-        console.log(`[Notification] ${latest.message}`);
-    }
+    // 3. ระบบ Polling (ดึงข้อมูลซ้ำทุก 3 วินาที เผื่อกรณี Event ไม่ทำงาน)
+    setInterval(() => {
+        renderFn();
+        checkNewNotifications(role, table);
+    }, 3000);
+
+    // 4. ฟัง Event ภายในหน้าเดียวกัน (CustomEvent)
+    window.addEventListener('krua_sync', () => {
+        renderFn();
+    });
 }
 
-// Helper to auto-scroll chat
-function scrollToBottom(id) {
-    const el = document.getElementById(id);
-    if (el) el.scrollTop = el.scrollHeight;
+/**
+ * ตรวจสอบการแจ้งเตือนใหม่และแสดง Alert
+ */
+function checkNewNotifications(role, table) {
+    const notifications = getData('krua_notifications');
+    const myNotis = notifications.filter(n => {
+        if (n.read) return false;
+        if (n.role === role) {
+            // ถ้าเป็นลูกค้า ต้องเช็คเลขโต๊ะด้วย
+            if (role === 'customer' && n.targetTable != table) return false;
+            return true;
+        }
+        return false;
+    });
+
+    if (myNotis.length > 0) {
+        myNotis.forEach(n => {
+            console.log('🔔 การแจ้งเตือนใหม่: ', n.message);
+            // แสดงผลแจ้งเตือนเล็กๆ (Toast) หรือเพิ่ม Badge ตามความต้องการ
+        });
+
+        // มาร์กที่อ่านแล้ว (ในการใช้งานจริงอาจต้องละเอียดกว่านี้)
+        // markAsRead(myNotis);
+    }
 }

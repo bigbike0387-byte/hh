@@ -1,41 +1,44 @@
 /**
- * login.js - ตรรกะการเข้าสู่ระบบแบบบัญชีผู้ใช้
+ * login.js - ระบบล็อกอินและจัดการสิทธิ์ (RBAC)
  */
 
-document.addEventListener('DOMContentLoaded', () => {
-    // ตรวจสอบว่าล็อกอินอยู่แล้วหรือไม่
-    const user = getCurrentUser();
-    if (user) {
-        window.location.href = user.scope[0];
-    }
-
-    // ดักจับปุ่ม Enter
-    document.getElementById('login-password').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') performLogin();
-    });
-});
-
 function performLogin() {
-    const user = document.getElementById('login-username').value;
-    const pass = document.getElementById('login-password').value;
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value.trim();
 
-    if (!user || !pass) {
-        showError('กรุณากรอก Username และ Password');
+    // 1. เช็คใน FIXED_ACCOUNTS จาก storage.js
+    if (FIXED_ACCOUNTS[user] && FIXED_ACCOUNTS[user].pass === pass) {
+        saveSession(user, FIXED_ACCOUNTS[user].role, FIXED_ACCOUNTS[user].page);
         return;
     }
 
-    const result = handleLogin(user, pass);
+    // 2. เช็คบัญชีลูกค้าทั่วไป
+    const users = getData(DB_KEYS.USERS);
+    const found = users.find(u => u.username === user && u.password === pass);
 
-    if (result.success) {
-        // ไปยังหน้าแรกที่บัญชีนั้นเข้าถึงได้
-        window.location.href = result.user.scope[0];
-    } else {
-        showError(result.message);
+    if (found) {
+        saveSession(user, 'customer', 'customer.html');
+        return;
     }
+
+    showError('Username หรือ Password ไม่ถูกต้องครับ');
+}
+
+function saveSession(username, role, page) {
+    const sessionData = {
+        username,
+        role,
+        page,
+        loginTime: Date.now()
+    };
+    localStorage.setItem(DB_KEYS.SESSION, JSON.stringify(sessionData));
+
+    // ไปยังหน้าที่กำหนด
+    window.location.href = page;
 }
 
 function showError(msg) {
-    const errorEl = document.getElementById('login-error');
-    errorEl.innerText = msg;
-    errorEl.style.display = 'block';
+    const el = document.getElementById('error-msg');
+    el.innerText = msg;
+    el.style.display = 'block';
 }

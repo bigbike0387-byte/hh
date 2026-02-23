@@ -1,271 +1,161 @@
 /**
- * customer.js - ตรรกะฝั่งลูกค้า (Advanced Feature Pack)
+ * customer.js - ตรรกะฝั่งลูกค้า
  */
 
 let tableId = new URLSearchParams(window.location.search).get('table') || '1';
 let cart = [];
-let isChatOpen = false;
-let isIssueOpen = false;
-let currentLanguage = 'th';
-let activePromo = null;
-let currentRating = 5;
-let activeOrderForPayment = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!checkAuth('customer.html')) return;
+    if (!checkAuth('customer')) return;
 
-    document.getElementById('table-info').innerText = `โต๊ะ : ${tableId}`;
-    setupCommonSync('customer', tableId, renderAll);
+    // 1. ตั้งหน้าจอ
+    document.getElementById('table-display').innerText = `โต๊ะ: ${tableId}`;
+    document.getElementById('chat-table-no').innerText = tableId;
 
-    // Initial Lang
-    document.getElementById('lang-switcher').value = currentLanguage;
-    applyLanguageUI();
+    // 2. เริ่มระบบ Sync
+    setupCoreSync('customer', tableId, renderCustomerUI);
+
+    // 3. เริ่มต้นข้อมูลตัวอย่าง (ถ้ายังไม่มี)
+    initMockData();
 });
 
-function renderAll() {
-    renderMenusAtCustomer();
-    renderMyOrders();
-    if (isChatOpen) renderChatAtCustomer();
-    if (isIssueOpen) renderMyIssues();
-    updateCartBadge();
-    updateCartUIAtCustomer();
+function renderCustomerUI() {
+    renderMenu();
+    renderOrders();
+    renderChat();
+    updateCartDisplay();
 }
 
-// --- Multi-language ---
-
-function toggleLanguage(val) {
-    currentLanguage = val;
-    applyLanguageUI();
-    renderAll();
+function initMockData() {
+    const currentMenu = getMenus();
+    if (currentMenu.length === 0) {
+        const mockMenus = [
+            { id: 1, name: 'กะเพราไข่ดาว', price: 60, image: 'https://images.unsplash.com/photo-1562607378-27419e048a07?w=300' },
+            { id: 2, name: 'ข้าวผัดปู', price: 120, image: 'https://images.unsplash.com/photo-1512058560524-72249e1bccc3?w=300' },
+            { id: 3, name: 'ต้มยำกุ้ง', price: 180, image: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=300' }
+        ];
+        setData(DB_KEYS.MENUS, mockMenus);
+    }
 }
 
-function applyLanguageUI() {
-    document.querySelectorAll('[data-en]').forEach(el => {
-        el.innerText = currentLanguage === 'en' ? el.getAttribute('data-en') : el.innerText;
-    });
-}
-
-// --- Menu Rendering (Stock Aware) ---
-
-function renderMenusAtCustomer() {
+// --- Menu Functions ---
+function renderMenu() {
     const menus = getMenus();
-    const container = document.getElementById('menu-container');
-    if (!container) return;
-
-    container.innerHTML = menus.map(menu => {
-        const isSoldOut = menu.stock <= 0;
-        return `
-            <div class="card fade-in" style="padding: 10px; position: relative;">
-                <img src="${menu.image}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 12px; filter: ${isSoldOut ? 'grayscale(1)' : 'none'}">
-                ${isSoldOut ? '<div class="badge badge-danger" style="position: absolute; top: 20px; left: 20px;">หมด (SOLD OUT)</div>' : ''}
-                <div class="mt-2">
-                    <strong>${menu.name}</strong>
-                    <div class="flex-between">
-                        <span class="text-primary">${menu.price}฿</span>
-                        <button class="btn btn-primary btn-sm" onclick="addToCartAtCustomer(${menu.id})" ${isSoldOut ? 'disabled' : ''}>
-                            <i class="fas fa-plus"></i> ${currentLanguage === 'en' ? 'Add' : 'เพิ่ม'}
-                        </button>
-                    </div>
+    const container = document.getElementById('menu-list');
+    container.innerHTML = menus.map(m => `
+        <div class="card fade-in" style="padding: 10px;">
+            <img src="${m.image}" style="width:100%; height:120px; object-fit:cover; border-radius:12px;">
+            <div class="mt-1">
+                <strong>${m.name}</strong>
+                <div class="flex-between">
+                    <span class="text-primary">${m.price}฿</span>
+                    <button class="btn btn-primary btn-sm" onclick="addToCart(${m.id}, '${m.name}', ${m.price})">+</button>
                 </div>
             </div>
-        `;
-    }).join('');
+        </div>
+    `).join('');
 }
 
-// --- Cart & Promo ---
-
-function addToCartAtCustomer(id) {
-    const menus = getMenus();
-    const menu = menus.find(m => m.id === id);
-    if (!menu) return;
-
-    const existing = cart.find(i => i.id === id);
-    if (existing) {
-        if (existing.qty >= menu.stock) return alert('ขออภัย สต็อกไม่พอครับ');
-        existing.qty++;
-    } else {
-        cart.push({ ...menu, qty: 1 });
-    }
-    updateCartUIAtCustomer();
-    updateCartBadge();
+// --- Cart Functions ---
+function addToCart(id, name, price) {
+    const item = cart.find(i => i.id === id);
+    if (item) item.qty++;
+    else cart.push({ id, name, price, qty: 1 });
+    updateCartDisplay();
 }
 
-function updateCartUIAtCustomer() {
+function updateCartDisplay() {
+    document.getElementById('cart-count').innerText = cart.reduce((sum, i) => sum + i.qty, 0);
     const container = document.getElementById('cart-items');
     if (!container) return;
 
-    container.innerHTML = cart.map((item, idx) => `
-        <div class="flex-between mb-2">
-            <div><strong>${item.name}</strong><br><small>${item.price}฿ x ${item.qty}</small></div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <button class="btn btn-sm" onclick="changeQtyAtCustomer(${idx}, -1)">-</button>
-                <span>${item.qty}</span>
-                <button class="btn btn-sm" onclick="changeQtyAtCustomer(${idx}, 1)">+</button>
-            </div>
+    container.innerHTML = cart.map(i => `
+        <div class="flex-between mb-1">
+            <span>${i.name} x ${i.qty}</span>
+            <span>${i.price * i.qty}฿</span>
         </div>
     `).join('');
 
-    const rawTotal = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-    let finalTotal = rawTotal;
-
-    if (activePromo) {
-        document.getElementById('cart-total-raw').innerText = `${rawTotal}฿`;
-        document.getElementById('cart-total-raw').style.display = 'inline';
-        const disc = activePromo.type === 'percent' ? (rawTotal * activePromo.value / 100) : activePromo.value;
-        finalTotal = rawTotal - disc;
-    } else {
-        document.getElementById('cart-total-raw').style.display = 'none';
-    }
-
-    document.getElementById('cart-total').innerText = `${finalTotal}฿`;
-}
-
-function applyPromoCode() {
-    const input = document.getElementById('promo-input');
-    const msg = document.getElementById('promo-msg');
-    const val = input.value.trim();
-
-    if (!val) return;
-
-    // Hardcode some promos for demo
-    const promos = [
-        { code: 'KRUA10', type: 'percent', value: 10, minSpend: 200 },
-        { code: 'SARAN50', type: 'flat', value: 50, minSpend: 300 }
-    ];
-
-    const p = promos.find(item => item.code.toUpperCase() === val.toUpperCase());
-    const rawTotal = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-
-    if (p) {
-        if (rawTotal < p.minSpend) {
-            msg.innerText = `ขั้นต่ำ ${p.minSpend}฿ ครับ`;
-            msg.style.color = 'red';
-        } else {
-            activePromo = p;
-            msg.innerText = `ใช้โค้ดลดเลิก! ลดไป ${p.type === 'percent' ? p.value + '%' : p.value + '฿'}`;
-            msg.style.color = 'green';
-            updateCartUIAtCustomer();
-        }
-    } else {
-        msg.innerText = 'รหัสถไม่ถูกต้อง';
-        msg.style.color = 'red';
-    }
-    msg.style.display = 'block';
-}
-
-function updateCartBadge() {
-    const count = cart.reduce((sum, i) => sum + i.qty, 0);
-    document.getElementById('cart-count').innerText = count;
+    document.getElementById('cart-total').innerText = `${cart.reduce((sum, i) => sum + (i.price * i.qty), 0)}฿`;
 }
 
 function toggleCart() {
-    const el = document.getElementById('cart-modal');
-    el.style.display = el.style.display === 'none' ? 'flex' : 'none';
-    if (el.style.display === 'flex') updateCartUIAtCustomer();
+    const modal = document.getElementById('cart-modal');
+    modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
 }
 
-function handleConfirmOrder() {
-    if (cart.length === 0) return alert('เลือกอาหารก่อนครับ');
-    const order = createOrder(tableId, cart);
-    if (order) {
-        cart = [];
-        activePromo = null;
-        toggleCart();
-        alert('ส่งออเดอร์เข้าครัวแล้วครับ!');
+function confirmOrder() {
+    if (cart.length === 0) return alert('กรุณาเลือกอาหารก่อนครับ');
+    createOrder(tableId, cart);
+    cart = [];
+    toggleCart();
+    alert('สั่งอาหารเรียบร้อย! กรุณารอสักครู่ครับ');
+}
+
+// --- Order Status ---
+function renderOrders() {
+    const orders = getOrders().filter(o => o.table == tableId && !o.paid);
+    const container = document.getElementById('order-list');
+    const section = document.getElementById('my-orders');
+
+    if (orders.length === 0) {
+        section.style.display = 'none';
+        return;
     }
-}
 
-// --- Payment Simulation ---
-
-function handlePayOrder(id) {
-    const { orders } = getAllData();
-    activeOrderForPayment = orders.find(o => o.id === id);
-    if (!activeOrderForPayment) return;
-
-    document.getElementById('pay-amount-text').innerText = `ยอดชำระ: ${activeOrderForPayment.finalPrice}฿`;
-    document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PROMPTPAY_${activeOrderForPayment.finalPrice}_${Date.now()}`;
-    document.getElementById('payment-modal').style.display = 'flex';
-}
-
-function confirmPaymentSimulation() {
-    updateOrderStatus(activeOrderForPayment.id, 'paid', 'ชำระเงินผ่าน QR จำลอง');
-    document.getElementById('payment-modal').style.display = 'none';
-
-    // Open review
-    document.getElementById('review-modal').style.display = 'flex';
-}
-
-// --- Reviews ---
-
-function setRating(r) {
-    currentRating = r;
-    const stars = document.getElementById('star-rating').children;
-    for (let i = 0; i < 5; i++) {
-        stars[i].className = i < r ? 'fas fa-star' : 'far fa-star';
-    }
-}
-
-function handleSaveReview() {
-    const comment = document.getElementById('review-comment').value;
-    submitReview(activeOrderForPayment.id, currentRating, comment);
-    document.getElementById('review-modal').style.display = 'none';
-    alert('ขอบคุณสำหรับคำแนะนำครับ!');
-}
-
-function renderMyOrders() {
-    const { orders } = getAllData();
-    const myOrders = orders.filter(o => o.table == tableId && (!o.paid || (Date.now() - o.paymentTime < 300000)));
-    const section = document.getElementById('active-orders-section');
-    const container = document.getElementById('my-orders-list');
-
-    if (myOrders.length === 0) { section.style.display = 'none'; return; }
     section.style.display = 'block';
-
-    container.innerHTML = myOrders.map(o => `
-        <div class="card mb-2" style="background: rgba(255,255,255,0.4);">
+    container.innerHTML = orders.map(o => `
+        <div class="card mb-1">
             <div class="flex-between">
-                <strong>ID: ${o.id}</strong>
-                <span class="badge badge-${o.status}">${getStatusTextThai(o.status)}</span>
+                <strong>ออเดอร์: ${o.id}</strong>
+                <span class="badge bg-${o.status}">${getStatusText(o.status)}</span>
             </div>
-            <div class="flex-between mt-1">
-                <small>${o.items.map(i => `${i.name} x${i.qty}`).join(', ')}</small>
-                <strong>${o.finalPrice}฿</strong>
+            <div class="text-muted mt-1">
+                ${o.items.map(i => `${i.name} x${i.qty}`).join(', ')}
             </div>
-            ${o.status === 'ready' && !o.paid ? `<button class="btn btn-success mt-1" style="width: 100%" onclick="handlePayOrder('${o.id}')">ชำระเงิน</button>` : ''}
+            ${o.status === 'ready' ? `
+                <button class="btn btn-success btn-sm mt-1" style="width:100%" onclick="handlePayment('${o.id}')">เช็คบิล (${o.totalPrice}฿)</button>
+            ` : ''}
         </div>
     `).join('');
 }
 
-// --- Existing Chat/Issue Logic (Simplified for brevity) ---
+function handlePayment(id) {
+    if (confirm('ยืนยันแจ้งชำระเงิน?')) {
+        updateOrderStatus(id, 'paid');
+    }
+}
+
+// --- Chat Functions ---
 function toggleChat() {
-    isChatOpen = !isChatOpen;
-    document.getElementById('chat-modal').style.display = isChatOpen ? 'flex' : 'none';
-    if (isChatOpen) renderChatAtCustomer();
+    const modal = document.getElementById('chat-modal');
+    modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
 }
-function handleSendMessageAtCustomer() {
+
+function handleSend() {
     const input = document.getElementById('chat-input');
-    if (input.value.trim()) { sendMessage(tableId, 'customer', input.value.trim()); input.value = ''; renderChatAtCustomer(); }
+    const text = input.value.trim();
+    if (!text) return;
+    sendMessage(tableId, 'customer', text);
+    input.value = '';
 }
-function renderChatAtCustomer() {
-    const { messages } = getAllData();
-    document.getElementById('chat-box').innerHTML = messages.filter(m => m.table == tableId).map(m => `<div class="chat-msg"><div class="msg-content ${m.sender === 'customer' ? 'msg-customer' : 'msg-staff'}">${m.text}</div></div>`).join('');
+
+function renderChat() {
+    const msgs = getData(DB_KEYS.MESSAGES).filter(m => m.table == tableId);
+    const box = document.getElementById('chat-box');
+    if (!box) return;
+
+    box.innerHTML = msgs.map(m => `
+        <div style="margin-bottom: 8px; text-align: ${m.sender === 'customer' ? 'right' : 'left'};">
+            <div style="display: inline-block; padding: 8px; border-radius: 12px; background: ${m.sender === 'customer' ? 'var(--primary)' : '#eee'}; color: ${m.sender === 'customer' ? 'white' : 'black'}; max-width: 80%;">
+                ${m.text}
+            </div>
+        </div>
+    `).join('');
+    box.scrollTop = box.scrollHeight;
 }
-function openIssueModal() {
-    isIssueOpen = !isIssueOpen;
-    document.getElementById('issue-modal').style.display = isIssueOpen ? 'flex' : 'none';
+
+function callStaff() {
+    addNotification('staff', 'call', `โต๊ะ ${tableId} เรียกพนักงาน!`, null, tableId);
+    alert('เรียกพนักงานแล้วครับ');
 }
-function handleSubmitIssue() {
-    const t = document.getElementById('issue-text');
-    if (t.value.trim()) { addIssue(tableId, t.value.trim()); t.value = ''; alert('ส่งแล้ว'); }
-}
-function handleCallStaff() {
-    addNotification('staff', 'call', `โต๊ะ ${tableId} เรียกพนักงาน`, null, tableId);
-    alert('เรียกแล้วครับ');
-}
-function changeQtyAtCustomer(idx, delta) {
-    cart[idx].qty += delta;
-    if (cart[idx].qty <= 0) cart.splice(idx, 1);
-    updateCartUIAtCustomer();
-    updateCartBadge();
-}
-function scrollToBottom(id) { const el = document.getElementById(id); el.scrollTop = el.scrollHeight; }
